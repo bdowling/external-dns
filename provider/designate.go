@@ -242,11 +242,23 @@ func NewDesignateProvider(domainFilter DomainFilter, dryRun bool) (Provider, err
 }
 
 // converts domain name to FQDN
-func canonicalizeDomainName(domain string) string {
-	if !strings.HasSuffix(domain, ".") {
-		domain += "."
+func canonicalizeDomainName(domain []string) []string {
+	var canDomain []string
+	for _, d := range domain {
+		if !strings.HasSuffix(d, ".") {
+			d += "."
+			canDomain = append(canDomain, strings.ToLower(d))
+		}
 	}
-	return strings.ToLower(domain)
+	return canDomain
+}
+
+// converts domain name to FQDN
+func canonicalizeDomainNameSingle(d string) string {
+	if !strings.HasSuffix(d, ".") {
+		d += "."
+	}
+	return strings.ToLower(d)
 }
 
 // returns ZoneID -> ZoneName mapping for zones that are managed by the Designate and match domain filter
@@ -259,7 +271,7 @@ func (p designateProvider) getZones() (map[string]string, error) {
 				return nil
 			}
 
-			zoneName := canonicalizeDomainName(zone.Name)
+			zoneName := canonicalizeDomainNameSingle(zone.Name)
 			if !p.domainFilter.Match(zoneName) {
 				return nil
 			}
@@ -336,7 +348,7 @@ func addEndpoint(ep *endpoint.Endpoint, recordSets map[string]*recordSet, delete
 	rs := recordSets[key]
 	if rs == nil {
 		rs = &recordSet{
-			dnsName:    canonicalizeDomainName(ep.DNSName),
+			dnsName:    canonicalizeDomainNameSingle(ep.DNSName),
 			recordType: ep.RecordType,
 			names:      make(map[string]bool),
 		}
@@ -352,11 +364,13 @@ func addEndpoint(ep *endpoint.Endpoint, recordSets map[string]*recordSet, delete
 			rs.names[rec] = true
 		}
 	}
-	target := ep.Target
+	targets := ep.Targets
 	if ep.RecordType == endpoint.RecordTypeCNAME {
-		target = canonicalizeDomainName(target)
+		targets = canonicalizeDomainName(targets)
 	}
-	rs.names[target] = !delete
+	for _, t := range targets {
+		rs.names[t] = !delete
+	}
 	recordSets[key] = rs
 }
 
